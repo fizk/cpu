@@ -14,5 +14,5 @@ Deno.test("CPU.INSTRUCTIONS.LDX_I", () => {
 
     assertEquals(cpu.x, 0xff);
 
-    memory.dump(0xff00, 0xffff);
+    // memory.dump(0xff00, 0xffff);
 });

@@ -28,6 +28,27 @@
                 "${file}"
             ],
             "attachSimplePort": 9229
-        }
+        },
+        {
+            "name": "Single Test",
+            "type": "pwa-node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "deno",
+            "runtimeArgs": [
+                "test",
+                "--filter",
+                "${selectedText}",
+                "--inspect-brk",
+                "-A",
+                "${file}"
+            ],
+            "attachSimplePort": 9229,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**"
+            ]
+        },
+
     ]
 }
