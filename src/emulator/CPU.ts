@@ -1,5 +1,5 @@
-
-import Memory from './Memory.ts';
+// @ts-ignore | stupid tc, does not allow extensions
+import type Memory from './Memory.ts';
 
 /**
  * Relatively simple 8 bit CPU with only a few internal registers capable of addressing at most 64Kb of

@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.90.0/testing/asserts.ts";
-import Memory from '../src/Memory.ts';
+import Memory from '../src/emulator/Memory.ts';
 
 Deno.test("memory.readByte", () => {
     const memory = new Memory();

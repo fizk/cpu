@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.90.0/testing/asserts.ts";
-import Lexer, {TOKENS} from '../src/Lexer.ts';
+import Lexer, {TOKENS} from '../src/parser/Lexer.ts';
 
 Deno.test("LEXER - line begins with comment", () => {
     const tokens = new Lexer(`
@@ -35,23 +35,44 @@ Deno.test("LEXER - comment > op-code", () => {
     ]);
 });
 
-Deno.test("LEXER - label > op-code", () => {
+Deno.test("LEXER - label: > op-code", () => {
     const tokens = new Lexer(`
         label: LDA`
     ).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
         { token: TOKENS.OPCODE, value: 'LDA', line: 1, from: 15, to: 17 },
     ]);
 });
 
-Deno.test("LEXER - label > break > op-code", () => {
+Deno.test("LEXER - label > op-code", () => {
+    const tokens = new Lexer(`
+        label LDA`
+    ).parse();
+    assertEquals(tokens, [
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 12 },
+        { token: TOKENS.OPCODE, value: 'LDA', line: 1, from: 14, to: 16 },
+    ]);
+});
+
+Deno.test("LEXER - label: > break > op-code", () => {
     const tokens = new Lexer(`
         label:
             LDA
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.OPCODE, value: 'LDA', line: 2, from: 12, to: 14 },
+    ]);
+});
+
+Deno.test("LEXER - label > break > op-code", () => {
+    const tokens = new Lexer(`
+        label
+            LDA
+    `).parse();
+    assertEquals(tokens, [
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 12 },
         { token: TOKENS.OPCODE, value: 'LDA', line: 2, from: 12, to: 14 },
     ]);
 });
@@ -114,8 +135,19 @@ Deno.test("LEXER - assignment", () => {
     `).parse();
     assertEquals(tokens, [
         { token: TOKENS.IDENTIFIER, value: 'BOARD', line: 1, from: 8, to: 12 },
-        { token: '=', value: null, line: 1, from: 16, to: 16 },
+        { token: TOKENS.PSEUDO_OPERATION, value: '=', line: 1, from: 16, to: 16 },
         { token: TOKENS.NUMBER, value: '$50', line: 1, from: 21, to: 23 },
+    ]);
+});
+
+Deno.test("LEXER - pseudo assignment", () => {
+    const tokens = new Lexer(`
+        BOARD   .equ    $50
+    `).parse();
+    assertEquals(tokens, [
+        { token: TOKENS.IDENTIFIER, value: 'BOARD', line: 1, from: 8, to: 12 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'EQU', line: 1, from: 16, to: 19 },
+        { token: TOKENS.NUMBER, value: '$50', line: 1, from: 24, to: 26 },
     ]);
 });
 
@@ -204,9 +236,18 @@ Deno.test("LEXER - * > assignment > number", () => {
         *=$50
     `).parse();
     assertEquals(tokens, [
-        { token: '*', value: null, line: 1, from: 8, to: 8 },
-        { token: '=', value: null, line: 1, from: 9, to: 9 },
+        { token: TOKENS.PSEUDO_OPERATION, value: '*=', line: 1, from: 8, to: 9 },
         { token: TOKENS.NUMBER, value: '$50', line: 1, from: 10, to: 12 },
+    ]);
+});
+
+Deno.test("LEXER - * > assignment > space > number", () => {
+    const tokens = new Lexer(`
+        *= $50
+    `).parse();
+    assertEquals(tokens, [
+        { token: TOKENS.PSEUDO_OPERATION, value: '*=', line: 1, from: 8, to: 9 },
+        { token: TOKENS.NUMBER, value: '$50', line: 1, from: 11, to: 13 },
     ]);
 });
 
@@ -215,7 +256,7 @@ Deno.test("LEXER - type > number", () => {
         .byte $10
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 8, to: 12 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 8, to: 12 },
         { token: TOKENS.NUMBER, value: '$10', line: 1, from: 14, to: 16 },
     ]);
 });
@@ -225,8 +266,8 @@ Deno.test("LEXER - label > type > number", () => {
         label: .byte $10
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.NUMBER, value: '$10', line: 1, from: 21, to: 23 },
     ]);
 });
@@ -236,8 +277,8 @@ Deno.test("LEXER - label > type > number, number", () => {
         label: .byte $10, $EE
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.NUMBER, value: '$10', line: 1, from: 21, to: 23 },
         { token: ',', value: null, line: 1, from: 24, to: 24 },
         { token: TOKENS.NUMBER, value: '$EE', line: 1, from: 26, to: 28 },
@@ -249,8 +290,8 @@ Deno.test("LEXER - label > type > double-string", () => {
         label: .byte "word"
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.DOUBLE_STRING, value: 'word', line: 1, from: 21, to: 26 },
     ]);
 });
@@ -260,8 +301,8 @@ Deno.test("LEXER - label > type > single-string", () => {
         label: .byte 'word'
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.SINGLE_STRING, value: 'word', line: 1, from: 21, to: 26 },
     ]);
 });
@@ -271,8 +312,8 @@ Deno.test("LEXER - label > type > single-string with double", () => {
         label: .byte 'wo"rd'
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.SINGLE_STRING, value: "wo\"rd", line: 1, from: 21, to: 27 },
     ]);
 });
@@ -282,8 +323,8 @@ Deno.test("LEXER - label > type > double-string with single", () => {
         label: .byte "wo'rd"
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.DOUBLE_STRING, value: "wo'rd", line: 1, from: 21, to: 27 },
     ]);
 });
@@ -293,8 +334,8 @@ Deno.test("LEXER - label > type > double-string special char", () => {
         label: .byte "word:#"
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.DOUBLE_STRING, value: "word:#", line: 1, from: 21, to: 28 },
     ]);
 });
@@ -304,8 +345,8 @@ Deno.test("LEXER - label > type > double-string more special char", () => {
         label: .byte "@^&*!*%$="
     `).parse();
     assertEquals(tokens, [
-        { token: TOKENS.LABEL, value: 'label', line: 1, from: 8, to: 13 },
-        { token: TOKENS.TYPE, value: 'byte', line: 1, from: 15, to: 19 },
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 13 },
+        { token: TOKENS.PSEUDO_OPERATION, value: 'BYTE', line: 1, from: 15, to: 19 },
         { token: TOKENS.DOUBLE_STRING, value: "@^&*!*%$=", line: 1, from: 21, to: 31 },
     ]);
 });
@@ -352,7 +393,7 @@ Deno.test("LEXER - increment location", () => {
     `).parse();
     assertEquals(tokens, [
         { token: TOKENS.OPCODE, value: 'BNE', line: 1, from: 8, to: 10 },
-        { token: '*', value: null, line: 1, from: 12, to: 12 },
+        { token: TOKENS.ORIGIN, value: '*', line: 1, from: 12, to: 12 },
         { token: '+', value: null, line: 1, from: 13, to: 13 },
         { token: TOKENS.NUMBER, value: '4', line: 1, from: 14, to: 14 },
     ]);
@@ -367,6 +408,19 @@ Deno.test("LEXER - decrement space", () => {
         { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 12, to: 16 },
         { token: '-', value: null, line: 1, from: 18, to: 18 },
         { token: TOKENS.NUMBER, value: '1', line: 1, from: 20, to: 20 },
+    ]);
+});
+
+Deno.test("LEXER - label *=*+1", () => {
+    const tokens = new Lexer(`
+        label *=*+1
+    `).parse();
+    assertEquals(tokens, [
+        { token: TOKENS.IDENTIFIER, value: 'label', line: 1, from: 8, to: 12 },
+        { token: TOKENS.PSEUDO_OPERATION, value: '*=', line: 1, from: 14, to: 15 },
+        { token: TOKENS.ORIGIN, value: '*', line: 1, from: 16, to: 16 },
+        { token: '+', value: null, line: 1, from: 17, to: 17 },
+        { token: TOKENS.NUMBER, value: '1', line: 1, from: 18, to: 18 },
     ]);
 });
 
@@ -388,9 +442,9 @@ Deno.test("LEXER - snippet", () => {
     const tokens = list.map(item => item.token);
 
     assertEquals(tokens, [
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,
     ])
 });
 
@@ -425,19 +479,19 @@ Deno.test("LEXER - program", () => {
     const tokens = lexer.parse().map(item => item.token);
 
     assertEquals(tokens, [
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,                                      // ACIADat	= 	$7F70
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,                                      // ACIASta	=	$7F71
-        TOKENS.IDENTIFIER, '=', TOKENS.NUMBER,                                      // BOARD=$50
-        '*', '=', TOKENS.NUMBER,                                                    // *=$1000
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,                  // ACIADat	= 	$7F70
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,                  // ACIASta	=	$7F71
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,                  // BOARD=$50
+        TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,                                     // *=$1000
         TOKENS.OPCODE, '#', TOKENS.NUMBER,                                          // LDA     #$00
         TOKENS.OPCODE, TOKENS.IDENTIFIER,                                           // STA     REV
-        TOKENS.LABEL, TOKENS.OPCODE, TOKENS.IDENTIFIER, ',', TOKENS.IDENTIFIER,     // FOUNX:  LDA	    POINTS,Y
+        TOKENS.IDENTIFIER, TOKENS.OPCODE, TOKENS.IDENTIFIER, ',', TOKENS.IDENTIFIER,// FOUNX:  LDA	    POINTS,Y
         TOKENS.OPCODE, TOKENS.IDENTIFIER, ',', TOKENS.IDENTIFIER,                   // CMP	    BCAP0,X
-        TOKENS.LABEL, TOKENS.OPCODE, '#', TOKENS.DOUBLE_STRING,                     // POUT1:  lDA     #"|"
-        TOKENS.LABEL,                                                               // match:
+        TOKENS.IDENTIFIER, TOKENS.OPCODE, '#', TOKENS.DOUBLE_STRING,                // POUT1:  lDA     #"|"
+        TOKENS.IDENTIFIER,                                                          // match:
         TOKENS.OPCODE, TOKENS.IDENTIFIER, ',', TOKENS.IDENTIFIER,                   // CMP	    BOARD,X
-        '*', '=', TOKENS.NUMBER,                                                    // *= $1580
-        TOKENS.LABEL, TOKENS.TYPE, TOKENS.NUMBER, ',', TOKENS.NUMBER, ',', TOKENS.NUMBER,
-        TOKENS.TYPE, TOKENS.NUMBER, ',', TOKENS.NUMBER, ',', TOKENS.NUMBER,
+        TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER,                                     // *= $1580
+        TOKENS.IDENTIFIER, TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER, ',', TOKENS.NUMBER, ',', TOKENS.NUMBER,
+        TOKENS.PSEUDO_OPERATION, TOKENS.NUMBER, ',', TOKENS.NUMBER, ',', TOKENS.NUMBER,
     ])
 });

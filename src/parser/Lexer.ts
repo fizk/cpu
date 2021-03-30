@@ -15,9 +15,20 @@ export const OPCODES = [
     'RTS', 'SBC', 'SEC', 'SED', 'SEI', 'STA', 'STX', 'STY', 'TAX', 'TAY', 'TSX', 'TXA', 'TXS', 'TYA',
 ];
 
-export const TYPES = [
-    'BLOCK', 'BYTE', 'DBYTE', 'TEXT', 'WORD',
-];
+export const PSEUDO_OPERATION = [
+    'BLOCK', 'BYTE', 'DBYTE' ,
+    'END'  , 'EQU' , 'TEXT'  ,
+    'WORD' , '*='  , '='     ,
+]
+
+export const DATA_TYPES = [
+    'BLOCK', 'BYTE', 'DBYTE',
+    'TEXT' , 'WORD',
+]
+
+export const ORIGIN = [
+    '*', 'ORG'
+]
 
 export const ASCII = [
     'NUL',      //  0  (null)
@@ -164,12 +175,21 @@ export const TOKENS = {
     COMMENT: 'COMMENT',
     IDENTIFIER: 'IDENTIFIER',
     NUMBER: 'NUMBER',
-    TYPE: 'TYPE',
-    LABEL: 'LABEL',
+    PSEUDO_OPERATION: 'PSEUDO_OPERATION',
     OPCODE: 'OPCODE',
     DOUBLE_STRING: 'DOUBLE_STRING',
     SINGLE_STRING: 'SINGLE_STRING',
+    CHAR: 'CHAR',
+    ORIGIN: 'ORIGIN',
 };
+
+export const TYPES = {
+    BLOCK: 'BLOCK',
+    BYTE: 'BYTE',
+    DBYTE: 'DBYTE',
+    TEXT: 'TEXT' ,
+    WORD: 'WORD',
+}
 
 export default class Lexer {
     private source: string;
@@ -217,11 +237,40 @@ export default class Lexer {
                     this.cursor++;
                     this.column++;
                 }
+                else if (this.state === TOKENS.PSEUDO_OPERATION) {
+                    if (this.isPseudoOperation(this.buffer)) {
+                        this.tokens.push({
+                            line: this.line,
+                            to: this.column - 1,
+                            from: this.start,
+                            token: this.state,
+                            value: this.buffer.toUpperCase(),
+                        });
+                        this.buffer = '';
+                        this.cursor++;
+                        this.column++;
+                        this.state = TOKENS.NONE;
+                    }
+                    else if (this.isOrigin(this.buffer)) {
+                        this.tokens.push({
+                            line: this.line,
+                            to: this.column - 1,
+                            from: this.start,
+                            token: TOKENS.ORIGIN,
+                            value: this.buffer.toUpperCase(),
+                        });
+                        this.buffer = '';
+                        this.cursor++;
+                        this.column++;
+                        this.state = TOKENS.NONE;
+                    }
+                    else {
+                        throw new Error(`Unknown token ${this.line}:${this.column}`);
+                    }
+                }
                 else if (
                     this.state === TOKENS.IDENTIFIER ||
-                    this.state === TOKENS.TYPE ||
                     this.state === TOKENS.NUMBER ||
-                    this.state === TOKENS.LABEL ||
                     this.state === TOKENS.OPCODE
                 ) {
                     const token = (this.state === TOKENS.IDENTIFIER && this.isOpCode(this.buffer))
@@ -268,7 +317,23 @@ export default class Lexer {
                 }
             }
             else if (char === '\n'){
-                if (this.state !== TOKENS.COMMENT && this.state !== TOKENS.NONE) {
+                if (this.state === TOKENS.PSEUDO_OPERATION) {
+                    const token = (this.isOrigin(this.buffer))
+                        ? TOKENS.ORIGIN
+                        : this.state
+                    this.tokens.push({
+                        line: this.line,
+                        to: this.column - 1,
+                        from: this.start,
+                        token: token,
+                        value: this.buffer,
+                    });
+                    this.state = TOKENS.NONE;
+                    this.buffer = '';
+                    this.cursor++;
+                    this.column++;
+                }
+                else if (this.state !== TOKENS.COMMENT && this.state !== TOKENS.NONE) {
                     const token = (this.state === TOKENS.IDENTIFIER && this.isOpCode(this.buffer))
                         ? TOKENS.OPCODE
                         : this.state;
@@ -309,7 +374,7 @@ export default class Lexer {
                     this.column++;
                     this.state = TOKENS.NONE;
                 }
-                else if (this.state === TOKENS.IDENTIFIER || this.state === TOKENS.LABEL) {
+                else if (this.state === TOKENS.IDENTIFIER) {
                     this.tokens.push({
                         line: this.line,
                         to: this.column - 1,
@@ -318,6 +383,30 @@ export default class Lexer {
                         value: this.buffer,
                     });
                     this.reserve(this.state, this.buffer);
+                    this.tokens.push({
+                        line: this.line,
+                        to: this.column,
+                        from: this.column,
+                        token: char,
+                        value: null,
+                    });
+                    this.cursor++;
+                    this.column++;
+                    this.start = 0;
+                    this.buffer = '';
+                    this.state = TOKENS.NONE;
+                }
+                else if (this.state === TOKENS.PSEUDO_OPERATION) {
+                    const state = this.isOrigin(this.buffer)
+                        ? TOKENS.ORIGIN
+                        : this.state;
+                    this.tokens.push({
+                        line: this.line,
+                        to: this.column - 1,
+                        from: this.start,
+                        token: state,
+                        value: this.buffer,
+                    });
                     this.tokens.push({
                         line: this.line,
                         to: this.column,
@@ -418,7 +507,7 @@ export default class Lexer {
                     this.buffer += char;
                 }
                 else if (this.state !== TOKENS.COMMENT) {
-                    this.state = TOKENS.TYPE;
+                    this.state = TOKENS.PSEUDO_OPERATION;
                     this.start = this.column;
                     this.buffer = '';
                 }
@@ -428,6 +517,23 @@ export default class Lexer {
             else if (char === '='){
                 if (this.state === TOKENS.SINGLE_STRING || this.state === TOKENS.DOUBLE_STRING) {
                     this.buffer += char;
+                }
+                else if (this.state === TOKENS.PSEUDO_OPERATION) {
+                    if (this.isPseudoOperation(this.buffer + char)) {
+                        this.tokens.push({
+                            line: this.line,
+                            to: this.column,
+                            from: this.start,
+                            token: this.state,
+                            value: this.buffer + char,
+                        });
+                        this.start = 0;
+                        this.buffer = '';
+                        this.state = TOKENS.NONE;
+                    }
+                    else {
+                        throw new Error()
+                    }
                 }
                 else if (this.state === TOKENS.IDENTIFIER) {
                     this.tokens.push({
@@ -442,8 +548,8 @@ export default class Lexer {
                         line: this.line,
                         to: this.column,
                         from: this.column,
-                        token: '=',
-                        value: null,
+                        token: TOKENS.PSEUDO_OPERATION,
+                        value: '=',
                     });
                     this.start = 0;
                     this.buffer = '';
@@ -454,8 +560,8 @@ export default class Lexer {
                         line: this.line,
                         to: this.column,
                         from: this.column,
-                        token: '=',
-                        value: null,
+                        token: TOKENS.PSEUDO_OPERATION,
+                        value: '=',
                     });
                 }
                 else if (this.state === TOKENS.COMMENT) {
@@ -515,16 +621,10 @@ export default class Lexer {
                 if (this.state === TOKENS.SINGLE_STRING || this.state === TOKENS.DOUBLE_STRING) {
                     this.buffer += char;
                 }
-                else if (this.state !== TOKENS.COMMENT) {
-                    this.state = TOKENS.NONE;
+                else {
+                    this.state = TOKENS.PSEUDO_OPERATION;
                     this.start = this.column;
-                    this.tokens.push({
-                        line: this.line,
-                        to: this.column,
-                        from: this.start,
-                        token: '*',
-                        value: null,
-                    });
+                    this.buffer = char;
                 }
                 this.cursor++;
                 this.column++;
@@ -669,10 +769,10 @@ export default class Lexer {
                         line: this.line,
                         to: this.column,
                         from: this.start,
-                        token: TOKENS.LABEL,
+                        token: this.state,
                         value: this.buffer,
                     });
-                    this.reserve(TOKENS.LABEL, this.buffer);
+                    this.reserve(this.state, this.buffer);
                     this.state = TOKENS.NONE;
                     this.buffer = '';
                 }
@@ -688,11 +788,6 @@ export default class Lexer {
                     this.state = TOKENS.IDENTIFIER;
                     this.start = this.column;
                     this.buffer = char;
-                    this.cursor++;
-                    this.column++;
-                }
-                else if (this.state === TOKENS.TYPE) {
-                    this.buffer += char;
                     this.cursor++;
                     this.column++;
                 }
@@ -724,7 +819,7 @@ export default class Lexer {
                 else if (this.state === TOKENS.NUMBER) {
                     this.buffer += char;
                 }
-                else if (this.state === TOKENS.IDENTIFIER || this.state === TOKENS.LABEL) {
+                else if (this.state === TOKENS.IDENTIFIER) {
                     this.buffer += char;
                 }
 
@@ -732,16 +827,11 @@ export default class Lexer {
                 this.column++;
             }
             else {
-                if (this.state === TOKENS.COMMENT) {
-                    this.cursor++;
-                    this.column++;
-                }
-                else if (this.state === TOKENS.DOUBLE_STRING || this.state === TOKENS.SINGLE_STRING) {
+                if (this.state === TOKENS.DOUBLE_STRING || this.state === TOKENS.SINGLE_STRING) {
                     this.buffer += char;
-                    this.cursor++;
-                    this.column++;
                 }
-                //@todo: what else?
+                this.cursor++;
+                this.column++;
             }
         }
 
@@ -752,8 +842,16 @@ export default class Lexer {
         return OPCODES.indexOf(code.toUpperCase()) >= 0;
     }
 
+    private isPseudoOperation(code: string) {
+        return PSEUDO_OPERATION.indexOf(code.toUpperCase()) >= 0;
+    }
+
+    private isOrigin(code: string) {
+        return ORIGIN.indexOf(code.toUpperCase()) >= 0;
+    }
+
     private reserve(type: string, name: string, value: number | null = null) {
-        if (type === TOKENS.IDENTIFIER || type === TOKENS.LABEL) {
+        if (type === TOKENS.IDENTIFIER) {
             !this.symbolTable.has(name) && this.symbolTable.set(name, {value, type});
         }
     }

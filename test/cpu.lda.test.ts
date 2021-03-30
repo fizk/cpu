@@ -1,6 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.90.0/testing/asserts.ts";
-import Memory from '../src/Memory.ts';
-import CPU from '../src/CPU.ts';
+import Memory from '../src/emulator/Memory.ts';
+import CPU from '../src/emulator/CPU.ts';
 
 Deno.test("CPU.INSTRUCTIONS.LDA_I", () => {
     const memory = new Memory();
